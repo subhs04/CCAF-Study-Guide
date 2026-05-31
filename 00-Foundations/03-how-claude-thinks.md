@@ -29,6 +29,65 @@ flowchart LR
 
 ---
 
+## How Token Prediction Works — Concrete Example
+
+### What is a Token?
+
+A token is a chunk of text the model's vocabulary recognizes — a word, part of a word, punctuation, or a space. Every piece of text (input and output) is broken into tokens before the model processes it.
+
+The sentence `"How can you help me pass the Claude Code Certified exam"` tokenizes to roughly:
+```
+"How" | "can" | "you" | "help" | "me" | "pass" | "the" | "Claude" | "Code" | "Certified" | "exam"
+```
+Internally each token is converted to a number (its vocabulary ID), so the model receives something like:
+```
+[1128, 460, 345, 1037, 502, 1522, 262, 36579, 6127, 17563, 8435]
+```
+
+### One Token at a Time
+
+Claude does **not** write the full response at once. The loop:
+
+1. Feed in full context (system prompt + user message + tokens already generated)
+2. Model outputs a probability distribution over all possible next tokens
+3. One token is sampled from that distribution
+4. That token is appended to the context
+5. Repeat from step 1 — until a special `[END]` token is predicted
+
+### Worked Example
+
+**User says:** `"How can you help me pass the Claude Code Certified exam?"`
+
+```
+Step 1:  predict "I"          → context: [system prompt + user message]
+Step 2:  predict "can"        → context: [...+ "I"]
+Step 3:  predict "help"       → context: [...+ "I can"]
+Step 4:  predict "you"        → context: [...+ "I can help"]
+Step 5:  predict "prepare"    → context: [...+ "I can help you"]
+Step 6:  predict "for"        → context: [...+ "I can help you prepare"]
+Step 7:  predict "the"        → context: [...+ "I can help you prepare for"]
+Step 8:  predict "Claude"     → context: [...+ "...for the"]
+Step 9:  predict "Code"       → context: [...+ "...for the Claude"]
+Step 10: predict "Certified"  → context: [...+ "...for the Claude Code"]
+Step 11: predict "exam"       → context: [...+ "...for the Claude Code Certified"]
+Step 12: predict "in"         → context: [...+ "...exam"]
+Step 13: predict "several"    → context: [...+ "...exam in"]
+Step 14: predict "ways"       → context: [...+ "...exam in several"]
+Step 15: predict [END]        → generation stops
+```
+
+Final output: `"I can help you prepare for the Claude Code Certified exam in several ways"`
+
+### Key Things to Remember
+
+- **It's one token at a time, always.** The model never plans the full sentence ahead — it only answers: *"given everything before this moment, what is the most likely next token?"*
+- **Once a token is predicted, it's locked in.** That token becomes part of the context for all future predictions. There is no going back.
+- **This same mechanism applies during tool use.** When Claude decides which tool to call in an agentic loop, it is still predicting tokens one by one — those tokens just form a structured tool-call JSON instead of plain English.
+
+> **Quick mental model**: Think of it like a very smart phone keyboard autocomplete — except instead of suggesting the next word based on frequency, Claude suggests the next token based on deep understanding of meaning, reasoning, and the entire conversation context.
+
+---
+
 ## Temperature
 
 Controls how "creative" or "random" the output is.
